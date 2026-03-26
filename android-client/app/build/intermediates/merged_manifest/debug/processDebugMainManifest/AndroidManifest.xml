@@ -23,6 +23,7 @@
         android:extractNativeLibs="false"
         android:label="Fintech App"
         android:supportsRtl="true"
+        android:testOnly="true"
         android:theme="@style/Theme.FintechApp" >
         <activity
             android:name="com.group6.fintechapp.MainActivity"

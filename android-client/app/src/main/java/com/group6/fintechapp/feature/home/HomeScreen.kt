@@ -35,8 +35,10 @@ fun HomeScreen(
                 },
                 actions = {
                     IconButton(onClick = { /* Notifications */ }) {
-                        Badge(
-                            content = { Text("3") }
+                        BadgedBox(
+                            badge = {
+                                Badge { Text("3") }
+                            }
                         ) {
                             Icon(Icons.Default.Notifications, contentDescription = "Notifications")
                         }
