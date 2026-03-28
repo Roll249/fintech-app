@@ -20,7 +20,8 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onNavigateToAccounts: () -> Unit = {}
+    onNavigateToAccounts: () -> Unit = {},
+    onNavigateToBillScan: () -> Unit = {}
 ) {
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale("vi", "VN")) }
 
@@ -96,7 +97,7 @@ fun HomeScreen(
                             QuickActionButton(
                                 icon = Icons.Default.QrCodeScanner,
                                 label = "Scan Bill",
-                                onClick = { },
+                                onClick = onNavigateToBillScan,
                                 modifier = Modifier.weight(1f)
                             )
                         }

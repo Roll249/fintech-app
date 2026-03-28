@@ -16,6 +16,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.group6.fintechapp.feature.account.AccountScreen
 import com.group6.fintechapp.feature.auth.LoginScreen
+import com.group6.fintechapp.feature.bill.BillScanScreen
 import com.group6.fintechapp.feature.budget.BudgetScreen
 import com.group6.fintechapp.feature.fund.FundScreen
 import com.group6.fintechapp.feature.home.HomeScreen
@@ -30,6 +31,7 @@ object AppRoutes {
     const val Accounts = "accounts"
     const val Funds = "funds"
     const val Profile = "profile"
+    const val BillScan = "bill_scan"
 }
 
 sealed class BottomNavItem(
@@ -102,6 +104,9 @@ fun FintechApp(navController: NavHostController = rememberNavController()) {
                 HomeScreen(
                     onNavigateToAccounts = {
                         navController.navigate(AppRoutes.Accounts)
+                    },
+                    onNavigateToBillScan = {
+                        navController.navigate(AppRoutes.BillScan)
                     }
                 )
             }
@@ -124,6 +129,11 @@ fun FintechApp(navController: NavHostController = rememberNavController()) {
                             popUpTo(0) { inclusive = true }
                         }
                     }
+                )
+            }
+            composable(AppRoutes.BillScan) {
+                BillScanScreen(
+                    onBack = { navController.popBackStack() }
                 )
             }
         }

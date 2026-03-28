@@ -1,3 +1,4 @@
+com.group6.fintechapp:xml/file_paths = 0x7f0f0000
 com.group6.fintechapp:styleable/TextAppearance = 0x7f0e0032
 com.group6.fintechapp:styleable/PopupWindowBackgroundState = 0x7f0e002b
 com.group6.fintechapp:styleable/PopupWindow = 0x7f0e002a

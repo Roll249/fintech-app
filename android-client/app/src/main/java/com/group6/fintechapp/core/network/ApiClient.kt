@@ -7,7 +7,9 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    private const val BASE_URL = "https://api.fintech.group6.com/"
+    // For local development, use 10.0.2.2 (Android emulator's localhost)
+    // For production, use your actual server URL
+    private const val BASE_URL = "http://10.0.2.2:3000/api/v1/"
     private const val CONNECT_TIMEOUT = 30L
     private const val READ_TIMEOUT = 30L
     private const val WRITE_TIMEOUT = 30L
