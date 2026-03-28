@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,7 +15,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.text.NumberFormat
 import java.util.Locale
@@ -24,6 +29,17 @@ fun HomeScreen(
     onNavigateToBillScan: () -> Unit = {}
 ) {
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale("vi", "VN")) }
+    var showAddTransactionDialog by remember { mutableStateOf(false) }
+    var showSuccessSnackbar by remember { mutableStateOf(false) }
+    
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    LaunchedEffect(showSuccessSnackbar) {
+        if (showSuccessSnackbar) {
+            snackbarHostState.showSnackbar("Transaction added successfully!")
+            showSuccessSnackbar = false
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -46,7 +62,8 @@ fun HomeScreen(
                     }
                 }
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -91,7 +108,7 @@ fun HomeScreen(
                             QuickActionButton(
                                 icon = Icons.Default.Add,
                                 label = "Add",
-                                onClick = { },
+                                onClick = { showAddTransactionDialog = true },
                                 modifier = Modifier.weight(1f)
                             )
                             QuickActionButton(
@@ -202,6 +219,134 @@ fun HomeScreen(
             }
         }
     }
+    
+    // Add Transaction Dialog
+    if (showAddTransactionDialog) {
+        AddTransactionDialog(
+            onDismiss = { showAddTransactionDialog = false },
+            onConfirm = {
+                showAddTransactionDialog = false
+                showSuccessSnackbar = true
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddTransactionDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    var amount by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var selectedType by remember { mutableStateOf("expense") }
+    var selectedCategory by remember { mutableStateOf("Food & Dining") }
+    var showCategoryDropdown by remember { mutableStateOf(false) }
+    
+    val categories = listOf(
+        "Food & Dining", "Transportation", "Shopping", "Entertainment",
+        "Bills & Utilities", "Health", "Education", "Salary", "Other"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Transaction") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Transaction Type
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .selectableGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = selectedType == "expense",
+                        onClick = { selectedType = "expense" },
+                        label = { Text("Expense") },
+                        leadingIcon = if (selectedType == "expense") {
+                            { Icon(Icons.Default.Remove, contentDescription = null, Modifier.size(18.dp)) }
+                        } else null,
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = selectedType == "income",
+                        onClick = { selectedType = "income" },
+                        label = { Text("Income") },
+                        leadingIcon = if (selectedType == "income") {
+                            { Icon(Icons.Default.Add, contentDescription = null, Modifier.size(18.dp)) }
+                        } else null,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                
+                // Amount
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it.filter { c -> c.isDigit() } },
+                    label = { Text("Amount (VND)") },
+                    leadingIcon = { Text("₫") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                
+                // Category Dropdown
+                ExposedDropdownMenuBox(
+                    expanded = showCategoryDropdown,
+                    onExpandedChange = { showCategoryDropdown = it }
+                ) {
+                    OutlinedTextField(
+                        value = selectedCategory,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Category") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showCategoryDropdown) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = showCategoryDropdown,
+                        onDismissRequest = { showCategoryDropdown = false }
+                    ) {
+                        categories.forEach { category ->
+                            DropdownMenuItem(
+                                text = { Text(category) },
+                                onClick = {
+                                    selectedCategory = category
+                                    showCategoryDropdown = false
+                                }
+                            )
+                        }
+                    }
+                }
+                
+                // Description
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = amount.isNotEmpty()
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
