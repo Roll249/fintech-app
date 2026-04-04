@@ -8,5 +8,7 @@ export declare class BudgetController {
     deleteBudget(req: AuthenticatedRequest, res: Response): Promise<void>;
     getSummary(req: AuthenticatedRequest, res: Response): Promise<void>;
     getAlerts(req: AuthenticatedRequest, res: Response): Promise<void>;
+    getSuggestions(req: AuthenticatedRequest, res: Response): Promise<void>;
+    resetBudget(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
 }
 //# sourceMappingURL=budget.controller.d.ts.map

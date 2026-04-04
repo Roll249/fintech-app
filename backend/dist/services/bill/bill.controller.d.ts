@@ -9,5 +9,9 @@ export declare class BillController {
     deleteBill(req: AuthenticatedRequest, res: Response): Promise<void>;
     reprocessBill(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
     createTransactionFromBill(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
+    setReminder(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
+    deleteReminder(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
+    getReminders(req: AuthenticatedRequest, res: Response): Promise<void>;
+    setupAutoPay(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
 }
 //# sourceMappingURL=bill.controller.d.ts.map

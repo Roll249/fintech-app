@@ -9,9 +9,15 @@ const controller = new user_controller_js_1.UserController();
 exports.userRouter.post('/login', controller.login);
 exports.userRouter.post('/register', controller.register);
 exports.userRouter.post('/refresh', controller.refreshToken);
+exports.userRouter.post('/forgot-password', controller.forgotPassword);
+exports.userRouter.post('/reset-password', controller.resetPassword);
+exports.userRouter.post('/oauth/google', controller.googleOAuth);
+exports.userRouter.get('/verify-email/:token', controller.verifyEmail);
 // User routes (protected - auth middleware applied in index.ts)
 exports.userRouter.get('/me', controller.getCurrentUser);
 exports.userRouter.put('/me', controller.updateProfile);
 exports.userRouter.put('/me/password', controller.changePassword);
 exports.userRouter.post('/logout', controller.logout);
+exports.userRouter.post('/resend-verification', controller.resendVerification);
+exports.userRouter.delete('/me', controller.deleteAccount);
 //# sourceMappingURL=user.routes.js.map

@@ -310,4 +310,298 @@ export class FundController {
       res.status(500).json({ error: 'Failed to remove member' });
     }
   }
+
+  async exportFund(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const { id } = req.params;
+      const { format = 'csv' } = req.query;
+
+      // Verify membership
+      const memberCheck = await query(
+        'SELECT role FROM fund_members WHERE fund_id = $1 AND user_id = $2',
+        [id, userId]
+      );
+
+      if (memberCheck.rows.length === 0) {
+        return res.status(403).json({ error: 'Not a member of this fund' });
+      }
+
+      // Get fund details
+      const fundResult = await query(
+        `SELECT f.*, u.name as owner_name, u.email as owner_email
+         FROM funds f
+         JOIN users u ON f.owner_id = u.id
+         WHERE f.id = $1`,
+        [id]
+      );
+
+      if (fundResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Fund not found' });
+      }
+
+      const fund = fundResult.rows[0];
+
+      // Get members with contributions
+      const membersResult = await query(
+        `SELECT fm.*, u.name, u.email
+         FROM fund_members fm
+         JOIN users u ON fm.user_id = u.id
+         WHERE fm.fund_id = $1
+         ORDER BY fm.contribution DESC`,
+        [id]
+      );
+
+      // Get transaction history (contributions)
+      const transactionsResult = await query(
+        `SELECT fc.*, u.name as user_name, u.email as user_email
+         FROM fund_contributions fc
+         JOIN users u ON fc.user_id = u.id
+         WHERE fc.fund_id = $1
+         ORDER BY fc.created_at DESC`,
+        [id]
+      );
+
+      if (format === 'csv') {
+        // Generate CSV content
+        let csv = '';
+        
+        // Fund Details Section
+        csv += 'FUND DETAILS\n';
+        csv += 'Field,Value\n';
+        csv += `Name,"${fund.name}"\n`;
+        csv += `Description,"${fund.description || ''}"\n`;
+        csv += `Target Amount,${fund.target_amount}\n`;
+        csv += `Current Amount,${fund.current_amount}\n`;
+        csv += `Progress,${(parseFloat(fund.current_amount) / parseFloat(fund.target_amount) * 100).toFixed(2)}%\n`;
+        csv += `Status,${fund.status}\n`;
+        csv += `Owner,"${fund.owner_name}"\n`;
+        csv += `Deadline,${fund.deadline || 'N/A'}\n`;
+        csv += `Created At,${fund.created_at}\n`;
+        csv += '\n';
+
+        // Members Section
+        csv += 'MEMBERS\n';
+        csv += 'Name,Email,Role,Contribution,Joined At\n';
+        membersResult.rows.forEach(m => {
+          csv += `"${m.name}","${m.email}","${m.role}",${m.contribution},"${m.joined_at}"\n`;
+        });
+        csv += '\n';
+
+        // Transaction History Section
+        csv += 'TRANSACTION HISTORY\n';
+        csv += 'Date,User,Type,Amount,Note\n';
+        transactionsResult.rows.forEach(t => {
+          csv += `"${t.created_at}","${t.user_name}","${t.type}",${t.amount},"${t.note || ''}"\n`;
+        });
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="fund-${id}-export.csv"`);
+        return res.send(csv);
+      } else if (format === 'pdf') {
+        // For PDF, return JSON that frontend can use to generate PDF
+        // In production, you'd use a PDF library like pdfkit
+        const exportData = {
+          fund: {
+            name: fund.name,
+            description: fund.description,
+            targetAmount: parseFloat(fund.target_amount),
+            currentAmount: parseFloat(fund.current_amount),
+            progress: parseFloat(fund.current_amount) / parseFloat(fund.target_amount),
+            status: fund.status,
+            owner: { name: fund.owner_name, email: fund.owner_email },
+            deadline: fund.deadline,
+            createdAt: fund.created_at,
+          },
+          members: membersResult.rows.map(m => ({
+            name: m.name,
+            email: m.email,
+            role: m.role,
+            contribution: parseFloat(m.contribution),
+            joinedAt: m.joined_at,
+          })),
+          transactions: transactionsResult.rows.map(t => ({
+            date: t.created_at,
+            userName: t.user_name,
+            type: t.type,
+            amount: parseFloat(t.amount),
+            note: t.note,
+          })),
+          exportedAt: new Date().toISOString(),
+          format: 'pdf-data',
+        };
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="fund-${id}-export.json"`);
+        return res.json(exportData);
+      } else {
+        return res.status(400).json({ error: 'Invalid format. Use csv or pdf' });
+      }
+    } catch (error) {
+      console.error('Export fund error:', error);
+      res.status(500).json({ error: 'Failed to export fund' });
+    }
+  }
+
+  async setContributionReminder(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const { id } = req.params;
+      const { amount, frequency = 'monthly', remindAt } = req.body;
+
+      // Verify membership
+      const memberCheck = await query(
+        'SELECT role FROM fund_members WHERE fund_id = $1 AND user_id = $2',
+        [id, userId]
+      );
+
+      if (memberCheck.rows.length === 0) {
+        return res.status(403).json({ error: 'Not a member of this fund' });
+      }
+
+      // Calculate next reminder date if not provided
+      let nextReminder = remindAt ? new Date(remindAt) : new Date();
+      if (!remindAt) {
+        switch (frequency) {
+          case 'weekly':
+            nextReminder.setDate(nextReminder.getDate() + 7);
+            break;
+          case 'biweekly':
+            nextReminder.setDate(nextReminder.getDate() + 14);
+            break;
+          case 'yearly':
+            nextReminder.setFullYear(nextReminder.getFullYear() + 1);
+            break;
+          case 'monthly':
+          default:
+            nextReminder.setMonth(nextReminder.getMonth() + 1);
+        }
+      }
+
+      const result = await query(
+        `INSERT INTO fund_contribution_reminders (fund_id, user_id, amount, frequency, next_reminder_at, status)
+         VALUES ($1, $2, $3, $4, $5, 'active')
+         ON CONFLICT (fund_id, user_id)
+         DO UPDATE SET amount = $3, frequency = $4, next_reminder_at = $5, status = 'active'
+         RETURNING id, next_reminder_at`,
+        [id, userId, amount, frequency, nextReminder]
+      );
+
+      res.status(201).json({
+        message: 'Contribution reminder set',
+        reminderId: result.rows[0].id,
+        amount,
+        frequency,
+        nextReminderAt: result.rows[0].next_reminder_at,
+      });
+    } catch (error) {
+      console.error('Set contribution reminder error:', error);
+      res.status(500).json({ error: 'Failed to set contribution reminder' });
+    }
+  }
+
+  async changeRole(req: AuthenticatedRequest, res: Response) {
+    try {
+      const currentUserId = req.user?.id;
+      const { id, userId: targetUserId } = req.params;
+      const { role } = req.body;
+
+      if (!role || !['admin', 'member'].includes(role)) {
+        return res.status(400).json({ error: 'Invalid role. Must be admin or member' });
+      }
+
+      // Verify current user is owner or admin
+      const currentMemberCheck = await query(
+        'SELECT role FROM fund_members WHERE fund_id = $1 AND user_id = $2',
+        [id, currentUserId]
+      );
+
+      if (currentMemberCheck.rows.length === 0 || 
+          !['owner', 'admin'].includes(currentMemberCheck.rows[0].role)) {
+        return res.status(403).json({ error: 'Not authorized to change roles' });
+      }
+
+      // Cannot change owner's role
+      const targetMemberCheck = await query(
+        'SELECT role FROM fund_members WHERE fund_id = $1 AND user_id = $2',
+        [id, targetUserId]
+      );
+
+      if (targetMemberCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Member not found' });
+      }
+
+      if (targetMemberCheck.rows[0].role === 'owner') {
+        return res.status(400).json({ error: 'Cannot change owner role' });
+      }
+
+      // Only owner can promote to admin
+      if (role === 'admin' && currentMemberCheck.rows[0].role !== 'owner') {
+        return res.status(403).json({ error: 'Only owner can promote to admin' });
+      }
+
+      await query(
+        'UPDATE fund_members SET role = $1 WHERE fund_id = $2 AND user_id = $3',
+        [role, id, targetUserId]
+      );
+
+      res.json({ 
+        message: 'Role updated',
+        userId: targetUserId,
+        newRole: role,
+      });
+    } catch (error) {
+      console.error('Change role error:', error);
+      res.status(500).json({ error: 'Failed to change role' });
+    }
+  }
+
+  async leaveFund(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const { id } = req.params;
+
+      // Check membership and role
+      const memberCheck = await query(
+        'SELECT role, contribution FROM fund_members WHERE fund_id = $1 AND user_id = $2',
+        [id, userId]
+      );
+
+      if (memberCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Not a member of this fund' });
+      }
+
+      if (memberCheck.rows[0].role === 'owner') {
+        return res.status(400).json({ 
+          error: 'Owner cannot leave. Transfer ownership or delete the fund instead.' 
+        });
+      }
+
+      const contribution = parseFloat(memberCheck.rows[0].contribution) || 0;
+
+      // Remove member
+      await query(
+        'DELETE FROM fund_members WHERE fund_id = $1 AND user_id = $2',
+        [id, userId]
+      );
+
+      // Remove any contribution reminders
+      await query(
+        'DELETE FROM fund_contribution_reminders WHERE fund_id = $1 AND user_id = $2',
+        [id, userId]
+      );
+
+      res.json({ 
+        message: 'You have left the fund',
+        fundId: id,
+        contributionMade: contribution,
+        note: contribution > 0 
+          ? 'Your contributions remain in the fund. Contact fund admin for refund if needed.'
+          : undefined,
+      });
+    } catch (error) {
+      console.error('Leave fund error:', error);
+      res.status(500).json({ error: 'Failed to leave fund' });
+    }
+  }
 }

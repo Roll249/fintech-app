@@ -21,9 +21,13 @@ const upload = multer({
 
 // Routes
 billRouter.get('/', controller.getBills);
+billRouter.get('/reminders', controller.getReminders);
 billRouter.get('/:id', controller.getBill);
 billRouter.post('/upload', upload.single('image'), controller.uploadBill);
 billRouter.put('/:id', controller.updateBill);
 billRouter.delete('/:id', controller.deleteBill);
 billRouter.post('/:id/reprocess', controller.reprocessBill);
 billRouter.post('/:id/create-transaction', controller.createTransactionFromBill);
+billRouter.post('/:id/set-reminder', controller.setReminder);
+billRouter.delete('/:id/reminder', controller.deleteReminder);
+billRouter.post('/:id/auto-pay', controller.setupAutoPay);

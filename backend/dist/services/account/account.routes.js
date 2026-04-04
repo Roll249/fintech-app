@@ -9,7 +9,10 @@ exports.accountRouter.get('/', controller.getAccounts);
 exports.accountRouter.get('/summary', controller.getSummary);
 exports.accountRouter.get('/banks', controller.getSupportedBanks);
 exports.accountRouter.get('/:id', controller.getAccount);
+exports.accountRouter.get('/:id/transactions', controller.getAccountTransactions);
+exports.accountRouter.get('/:id/sync-history', controller.getSyncHistory);
 exports.accountRouter.post('/connect', controller.connectAccount);
 exports.accountRouter.delete('/:id', controller.disconnectAccount);
 exports.accountRouter.post('/:id/sync', controller.syncAccount);
+exports.accountRouter.post('/:id/oauth/refresh', controller.refreshOAuth);
 //# sourceMappingURL=account.routes.js.map

@@ -11,5 +11,9 @@ export declare class FundController {
     getContributions(req: AuthenticatedRequest, res: Response): Promise<void>;
     inviteMember(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
     removeMember(req: AuthenticatedRequest, res: Response): Promise<void>;
+    exportFund(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
+    setContributionReminder(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
+    changeRole(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
+    leaveFund(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
 }
 //# sourceMappingURL=fund.controller.d.ts.map

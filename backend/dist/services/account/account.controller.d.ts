@@ -6,6 +6,9 @@ export declare class AccountController {
     connectAccount(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
     disconnectAccount(req: AuthenticatedRequest, res: Response): Promise<void>;
     syncAccount(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
+    getAccountTransactions(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
+    getSyncHistory(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
+    refreshOAuth(req: AuthenticatedRequest, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
     getSummary(req: AuthenticatedRequest, res: Response): Promise<void>;
     getSupportedBanks(req: AuthenticatedRequest, res: Response): Promise<void>;
 }

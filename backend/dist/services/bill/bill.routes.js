@@ -25,10 +25,14 @@ const upload = (0, multer_1.default)({
 });
 // Routes
 exports.billRouter.get('/', controller.getBills);
+exports.billRouter.get('/reminders', controller.getReminders);
 exports.billRouter.get('/:id', controller.getBill);
 exports.billRouter.post('/upload', upload.single('image'), controller.uploadBill);
 exports.billRouter.put('/:id', controller.updateBill);
 exports.billRouter.delete('/:id', controller.deleteBill);
 exports.billRouter.post('/:id/reprocess', controller.reprocessBill);
 exports.billRouter.post('/:id/create-transaction', controller.createTransactionFromBill);
+exports.billRouter.post('/:id/set-reminder', controller.setReminder);
+exports.billRouter.delete('/:id/reminder', controller.deleteReminder);
+exports.billRouter.post('/:id/auto-pay', controller.setupAutoPay);
 //# sourceMappingURL=bill.routes.js.map

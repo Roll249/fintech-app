@@ -9,9 +9,11 @@ exports.notificationRouter.get('/', controller.getNotifications);
 exports.notificationRouter.get('/summary', controller.getSummary);
 exports.notificationRouter.get('/preferences', controller.getPreferences);
 exports.notificationRouter.put('/preferences', controller.updatePreferences);
+exports.notificationRouter.delete('/', controller.clearAllNotifications);
 exports.notificationRouter.get('/:id', controller.getNotification);
 exports.notificationRouter.put('/:id/read', controller.markAsRead);
 exports.notificationRouter.put('/read-all', controller.markAllAsRead);
 exports.notificationRouter.delete('/:id', controller.deleteNotification);
 exports.notificationRouter.post('/devices', controller.registerDevice);
+exports.notificationRouter.delete('/devices/:token', controller.unregisterDevice);
 //# sourceMappingURL=notification.routes.js.map

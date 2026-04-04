@@ -243,6 +243,144 @@ class BillController {
             res.status(500).json({ error: 'Failed to create transaction' });
         }
     }
+    async setReminder(req, res) {
+        try {
+            const userId = req.user?.id;
+            const { id } = req.params;
+            const { remindAt } = req.body;
+            if (!remindAt) {
+                return res.status(400).json({ error: 'remindAt is required' });
+            }
+            // Verify bill ownership
+            const billCheck = await (0, db_js_1.query)('SELECT id FROM bills WHERE id = $1 AND user_id = $2', [id, userId]);
+            if (billCheck.rows.length === 0) {
+                return res.status(404).json({ error: 'Bill not found' });
+            }
+            // Create or update reminder
+            const result = await (0, db_js_1.query)(`INSERT INTO bill_reminders (bill_id, user_id, remind_at, status)
+         VALUES ($1, $2, $3, 'pending')
+         ON CONFLICT (bill_id) 
+         DO UPDATE SET remind_at = $3, status = 'pending'
+         RETURNING id, remind_at`, [id, userId, remindAt]);
+            res.status(201).json({
+                message: 'Reminder set',
+                reminderId: result.rows[0].id,
+                remindAt: result.rows[0].remind_at,
+            });
+        }
+        catch (error) {
+            console.error('Set reminder error:', error);
+            res.status(500).json({ error: 'Failed to set reminder' });
+        }
+    }
+    async deleteReminder(req, res) {
+        try {
+            const userId = req.user?.id;
+            const { id } = req.params;
+            const result = await (0, db_js_1.query)('DELETE FROM bill_reminders WHERE bill_id = $1 AND user_id = $2 RETURNING id', [id, userId]);
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'Reminder not found' });
+            }
+            res.json({ message: 'Reminder deleted' });
+        }
+        catch (error) {
+            console.error('Delete reminder error:', error);
+            res.status(500).json({ error: 'Failed to delete reminder' });
+        }
+    }
+    async getReminders(req, res) {
+        try {
+            const userId = req.user?.id;
+            const { page = 1, pageSize = 20 } = req.query;
+            const offset = (Number(page) - 1) * Number(pageSize);
+            const result = await (0, db_js_1.query)(`SELECT br.*, b.merchant_name, b.total_amount, b.bill_date, b.image_url
+         FROM bill_reminders br
+         JOIN bills b ON br.bill_id = b.id
+         WHERE br.user_id = $1 AND br.status = 'pending'
+         ORDER BY br.remind_at ASC
+         LIMIT $2 OFFSET $3`, [userId, Number(pageSize), offset]);
+            const countResult = await (0, db_js_1.query)(`SELECT COUNT(*) FROM bill_reminders WHERE user_id = $1 AND status = 'pending'`, [userId]);
+            res.json({
+                items: result.rows.map(row => ({
+                    id: row.id,
+                    billId: row.bill_id,
+                    bill: {
+                        id: row.bill_id,
+                        merchantName: row.merchant_name,
+                        totalAmount: row.total_amount,
+                        billDate: row.bill_date,
+                        imageUrl: row.image_url,
+                    },
+                    remindAt: row.remind_at,
+                    status: row.status,
+                    createdAt: row.created_at,
+                })),
+                page: Number(page),
+                pageSize: Number(pageSize),
+                totalItems: parseInt(countResult.rows[0].count),
+                totalPages: Math.ceil(parseInt(countResult.rows[0].count) / Number(pageSize)),
+            });
+        }
+        catch (error) {
+            console.error('Get reminders error:', error);
+            res.status(500).json({ error: 'Failed to get reminders' });
+        }
+    }
+    async setupAutoPay(req, res) {
+        try {
+            const userId = req.user?.id;
+            const { id } = req.params;
+            const { accountId, frequency = 'monthly' } = req.body;
+            if (!accountId) {
+                return res.status(400).json({ error: 'accountId is required' });
+            }
+            // Verify bill ownership
+            const billCheck = await (0, db_js_1.query)('SELECT merchant_name, total_amount FROM bills WHERE id = $1 AND user_id = $2', [id, userId]);
+            if (billCheck.rows.length === 0) {
+                return res.status(404).json({ error: 'Bill not found' });
+            }
+            // Verify account ownership
+            const accountCheck = await (0, db_js_1.query)('SELECT id FROM accounts WHERE id = $1 AND user_id = $2 AND status = $3', [accountId, userId, 'active']);
+            if (accountCheck.rows.length === 0) {
+                return res.status(400).json({ error: 'Account not found or not active' });
+            }
+            // Calculate next payment date based on frequency
+            const nextPaymentDate = new Date();
+            switch (frequency) {
+                case 'weekly':
+                    nextPaymentDate.setDate(nextPaymentDate.getDate() + 7);
+                    break;
+                case 'biweekly':
+                    nextPaymentDate.setDate(nextPaymentDate.getDate() + 14);
+                    break;
+                case 'yearly':
+                    nextPaymentDate.setFullYear(nextPaymentDate.getFullYear() + 1);
+                    break;
+                case 'monthly':
+                default:
+                    nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+            }
+            // Create or update auto-pay setup
+            const result = await (0, db_js_1.query)(`INSERT INTO bill_auto_pay (bill_id, user_id, account_id, frequency, next_payment_date, status)
+         VALUES ($1, $2, $3, $4, $5, 'active')
+         ON CONFLICT (bill_id)
+         DO UPDATE SET account_id = $3, frequency = $4, next_payment_date = $5, status = 'active'
+         RETURNING id, next_payment_date`, [id, userId, accountId, frequency, nextPaymentDate]);
+            res.status(201).json({
+                message: 'Auto-pay setup successful',
+                autoPayId: result.rows[0].id,
+                accountId,
+                frequency,
+                nextPaymentDate: result.rows[0].next_payment_date,
+                billAmount: billCheck.rows[0].total_amount,
+                merchantName: billCheck.rows[0].merchant_name,
+            });
+        }
+        catch (error) {
+            console.error('Setup auto-pay error:', error);
+            res.status(500).json({ error: 'Failed to setup auto-pay' });
+        }
+    }
 }
 exports.BillController = BillController;
 //# sourceMappingURL=bill.controller.js.map
