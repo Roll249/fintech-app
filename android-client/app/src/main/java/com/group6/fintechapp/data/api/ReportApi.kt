@@ -43,6 +43,22 @@ interface ReportApi {
     @GET("api/v1/reports/insights")
     suspend fun getInsights(): Response<List<ReportInsight>>
     
+    // Chart endpoints
+    @GET("api/v1/reports/charts/category")
+    suspend fun getCategoryChart(
+        @Query("startDate") startDate: String? = null,
+        @Query("endDate") endDate: String? = null
+    ): Response<ChartResponse>
+    
+    @GET("api/v1/reports/charts/trends")
+    suspend fun getTrendsChart(
+        @Query("months") months: Int = 6,
+        @Query("type") chartType: String = "bar"
+    ): Response<ChartResponse>
+    
+    @GET("api/v1/reports/charts/budget")
+    suspend fun getBudgetChart(): Response<ChartResponse>
+    
     // Admin endpoints
     @GET("api/v1/admin/dashboard")
     suspend fun getAdminDashboard(): Response<AdminDashboard>
@@ -51,4 +67,23 @@ interface ReportApi {
 data class ReportDownloadResponse(
     val downloadUrl: String,
     val expiresAt: String
+)
+
+data class ChartResponse(
+    val imageUrl: String?,
+    val message: String? = null,
+    val data: List<ChartDataPoint> = emptyList()
+)
+
+data class ChartDataPoint(
+    val category: String? = null,
+    val month: String? = null,
+    val amount: Double? = null,
+    val income: Double? = null,
+    val expense: Double? = null,
+    val savings: Double? = null,
+    val spent: Double? = null,
+    val limit: Double? = null,
+    val percentage: Double? = null,
+    val color: String? = null
 )

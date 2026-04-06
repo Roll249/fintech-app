@@ -14,3 +14,4 @@ accountRouter.post('/connect', controller.connectAccount);
 accountRouter.delete('/:id', controller.disconnectAccount);
 accountRouter.post('/:id/sync', controller.syncAccount);
 accountRouter.post('/:id/oauth/refresh', controller.refreshOAuth);
+accountRouter.post('/:id/generate-test-transactions', controller.generateTestTransactions);

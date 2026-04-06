@@ -137,8 +137,73 @@ export class TransactionController {
         [balanceChange, accountId]
       );
 
-      // TODO: Publish Kafka event for budget tracking
-      // kafkaProducer.send({ topic: 'transaction.created', ... })
+      // Get category name for notification
+      let categoryName = 'Khác';
+      if (categoryId) {
+        const categoryResult = await query('SELECT name FROM categories WHERE id = $1', [categoryId]);
+        if (categoryResult.rows.length > 0) {
+          categoryName = categoryResult.rows[0].name;
+        }
+      }
+
+      // Create in-app notification
+      const notifTitle = type === 'income' ? 'Thu nhập mới' : 'Chi tiêu mới';
+      const notifBody = type === 'income'
+        ? `+${Number(amount).toLocaleString('vi-VN')} VND - ${description || categoryName}`
+        : `-${Number(amount).toLocaleString('vi-VN')} VND - ${description || categoryName}`;
+
+      await query(
+        `INSERT INTO notifications (user_id, type, title, body, data)
+         VALUES ($1, 'transaction', $2, $3, $4)`,
+        [
+          userId,
+          notifTitle,
+          notifBody,
+          JSON.stringify({ transactionId: result.rows[0].id, type, amount })
+        ]
+      );
+
+      // Check budget alerts
+      if (type === 'expense' && categoryId) {
+        const budgetResult = await query(
+          `SELECT id, amount_limit, alert_threshold FROM budgets 
+           WHERE user_id = $1 AND category_id = $2 AND is_active = true`,
+          [userId, categoryId]
+        );
+
+        if (budgetResult.rows.length > 0) {
+          const budget = budgetResult.rows[0];
+          
+          // Calculate current spent
+          const spentResult = await query(
+            `SELECT COALESCE(SUM(amount), 0) as spent FROM transactions 
+             WHERE user_id = $1 AND category_id = $2 AND type = 'expense'
+             AND date >= date_trunc('month', CURRENT_DATE)`,
+            [userId, categoryId]
+          );
+          
+          const spent = parseFloat(spentResult.rows[0].spent);
+          const percentage = (spent / budget.amount_limit) * 100;
+
+          // Send budget alert if threshold exceeded
+          if (percentage >= budget.alert_threshold) {
+            const alertTitle = percentage >= 100 ? 'Vượt ngân sách!' : 'Cảnh báo ngân sách';
+            const alertBody = `Bạn đã chi ${percentage.toFixed(0)}% ngân sách ${categoryName}`;
+
+            await query(
+              `INSERT INTO notifications (user_id, type, title, body, data)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [
+                userId,
+                percentage >= 100 ? 'budget_exceeded' : 'budget_warning',
+                alertTitle,
+                alertBody,
+                JSON.stringify({ budgetId: budget.id, percentage, spent, limit: budget.amount_limit })
+              ]
+            );
+          }
+        }
+      }
 
       res.status(201).json({ id: result.rows[0].id, message: 'Transaction created' });
     } catch (error) {

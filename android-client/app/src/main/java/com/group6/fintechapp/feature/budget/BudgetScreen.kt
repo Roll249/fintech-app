@@ -1,5 +1,6 @@
 package com.group6.fintechapp.feature.budget
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,6 +18,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.group6.fintechapp.data.model.Budget
 import com.group6.fintechapp.data.model.BudgetPeriod
 import com.group6.fintechapp.data.model.CreateBudgetRequest
+import com.group6.fintechapp.data.model.UpdateBudgetRequest
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -27,6 +29,8 @@ fun BudgetScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf(false) }
+    var selectedBudget by remember { mutableStateOf<Budget?>(null) }
 
     Scaffold(
         topBar = {
@@ -100,7 +104,13 @@ fun BudgetScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(uiState.budgets) { budget ->
-                            BudgetItem(budget = budget)
+                            BudgetItem(
+                                budget = budget,
+                                onClick = {
+                                    selectedBudget = budget
+                                    showEditDialog = true
+                                }
+                            )
                         }
                     }
                 }
@@ -114,6 +124,26 @@ fun BudgetScreen(
             onConfirm = { request ->
                 viewModel.createBudget(request)
                 showAddDialog = false
+            }
+        )
+    }
+
+    if (showEditDialog && selectedBudget != null) {
+        EditBudgetDialog(
+            budget = selectedBudget!!,
+            onDismiss = {
+                showEditDialog = false
+                selectedBudget = null
+            },
+            onUpdate = { request ->
+                viewModel.updateBudget(selectedBudget!!.id, request)
+                showEditDialog = false
+                selectedBudget = null
+            },
+            onDelete = {
+                viewModel.deleteBudget(selectedBudget!!.id)
+                showEditDialog = false
+                selectedBudget = null
             }
         )
     }
@@ -200,7 +230,10 @@ fun BudgetSummaryCard(
 }
 
 @Composable
-fun BudgetItem(budget: Budget) {
+fun BudgetItem(
+    budget: Budget,
+    onClick: () -> Unit = {}
+) {
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale("vi", "VN")) }
     val progress = if (budget.limit > 0) (budget.spent / budget.limit).coerceIn(0.0, 1.0) else 0.0
     val progressColor = when {
@@ -210,7 +243,9 @@ fun BudgetItem(budget: Budget) {
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -340,4 +375,119 @@ fun AddBudgetDialog(
             }
         }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditBudgetDialog(
+    budget: Budget,
+    onDismiss: () -> Unit,
+    onUpdate: (UpdateBudgetRequest) -> Unit,
+    onDelete: () -> Unit
+) {
+    var limit by remember { mutableStateOf(budget.limit.toLong().toString()) }
+    var alertThreshold by remember { mutableStateOf(budget.alertThreshold.toString()) }
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
+    val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale("vi", "VN")) }
+
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("Delete Budget") },
+            text = {
+                Text("Are you sure you want to delete the budget for ${budget.category.name}? This action cannot be undone.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmation = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    } else {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Edit Budget") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = budget.category.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Text(
+                        text = "Period: ${budget.period.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Text(
+                        text = "Current Spent: ${currencyFormat.format(budget.spent)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    OutlinedTextField(
+                        value = limit,
+                        onValueChange = { limit = it.filter { c -> c.isDigit() || c == '.' } },
+                        label = { Text("Budget Limit") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    OutlinedTextField(
+                        value = alertThreshold,
+                        onValueChange = { alertThreshold = it.filter { c -> c.isDigit() } },
+                        label = { Text("Alert at (%)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val limitValue = limit.toDoubleOrNull()
+                        val threshold = alertThreshold.toIntOrNull()
+                        if (limitValue != null && limitValue > 0) {
+                            onUpdate(
+                                UpdateBudgetRequest(
+                                    limit = limitValue,
+                                    alertThreshold = threshold?.coerceIn(1, 100)
+                                )
+                            )
+                        }
+                    }
+                ) {
+                    Text("Update")
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(
+                        onClick = { showDeleteConfirmation = true },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Delete")
+                    }
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+                }
+            }
+        )
+    }
 }

@@ -3,6 +3,7 @@ package com.group6.fintechapp.data.repository
 import com.group6.fintechapp.core.network.ApiClient
 import com.group6.fintechapp.core.network.ApiResponse
 import com.group6.fintechapp.core.network.PaginatedResponse
+import com.group6.fintechapp.data.api.ChartResponse
 import com.group6.fintechapp.data.api.ReportApi
 import com.group6.fintechapp.data.api.ReportDownloadResponse
 import com.group6.fintechapp.data.model.*
@@ -140,4 +141,50 @@ class ReportRepository {
                 ApiResponse.Exception(e)
             }
         }
+
+    // Chart methods
+    suspend fun getCategoryChart(
+        startDate: String? = null,
+        endDate: String? = null
+    ): ApiResponse<ChartResponse> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.getCategoryChart(startDate, endDate)
+            if (response.isSuccessful && response.body() != null) {
+                ApiResponse.Success(response.body()!!)
+            } else {
+                ApiResponse.Error(response.code(), response.message())
+            }
+        } catch (e: Exception) {
+            ApiResponse.Exception(e)
+        }
+    }
+
+    suspend fun getTrendsChart(
+        months: Int = 6,
+        chartType: String = "bar"
+    ): ApiResponse<ChartResponse> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.getTrendsChart(months, chartType)
+            if (response.isSuccessful && response.body() != null) {
+                ApiResponse.Success(response.body()!!)
+            } else {
+                ApiResponse.Error(response.code(), response.message())
+            }
+        } catch (e: Exception) {
+            ApiResponse.Exception(e)
+        }
+    }
+
+    suspend fun getBudgetChart(): ApiResponse<ChartResponse> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.getBudgetChart()
+            if (response.isSuccessful && response.body() != null) {
+                ApiResponse.Success(response.body()!!)
+            } else {
+                ApiResponse.Error(response.code(), response.message())
+            }
+        } catch (e: Exception) {
+            ApiResponse.Exception(e)
+        }
+    }
 }

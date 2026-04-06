@@ -405,4 +405,278 @@ export class ReportController {
       res.status(500).json({ error: 'Failed to get insights' });
     }
   }
+
+  /**
+   * Get chart image URL for spending by category
+   * Uses QuickChart.io API to render pie chart
+   */
+  async getCategoryChart(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const { startDate, endDate } = req.query;
+
+      // Default to this month if no dates provided
+      const start = startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+      const end = endDate || new Date().toISOString().split('T')[0];
+
+      // Get spending by category
+      const result = await query(
+        `SELECT c.name, SUM(t.amount) as total, c.color
+         FROM transactions t
+         JOIN categories c ON t.category_id = c.id
+         WHERE t.user_id = $1 AND t.type = 'expense' 
+         AND t.date >= $2 AND t.date <= $3
+         GROUP BY c.id, c.name, c.color
+         ORDER BY total DESC
+         LIMIT 8`,
+        [userId, start, end]
+      );
+
+      if (result.rows.length === 0) {
+        return res.json({
+          imageUrl: null,
+          message: 'No expense data available',
+          data: [],
+        });
+      }
+
+      const labels = result.rows.map(r => r.name);
+      const data = result.rows.map(r => parseFloat(r.total));
+      const colors = result.rows.map(r => r.color || '#' + Math.floor(Math.random()*16777215).toString(16));
+
+      // Build QuickChart URL
+      const chartConfig = {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: colors,
+            borderWidth: 1,
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { position: 'right' },
+            datalabels: {
+              display: true,
+              formatter: (value: number, ctx: any) => {
+                const sum = ctx.dataset.data.reduce((a: number, b: number) => a + b, 0);
+                const percentage = (value * 100 / sum).toFixed(1) + "%";
+                return percentage;
+              },
+              color: '#fff',
+            }
+          }
+        }
+      };
+
+      const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=400&h=300`;
+
+      res.json({
+        imageUrl: chartUrl,
+        data: result.rows.map(r => ({
+          category: r.name,
+          amount: parseFloat(r.total),
+          color: r.color,
+        })),
+      });
+    } catch (error) {
+      console.error('Get category chart error:', error);
+      res.status(500).json({ error: 'Failed to generate chart' });
+    }
+  }
+
+  /**
+   * Get chart image URL for monthly spending trends
+   * Uses QuickChart.io API to render line/bar chart
+   */
+  async getTrendsChart(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const months = Number(req.query.months) || 6;
+      const chartType = req.query.type || 'bar'; // 'bar' or 'line'
+
+      const result = await query(
+        `SELECT 
+           TO_CHAR(date, 'YYYY-MM') as month,
+           type,
+           SUM(amount) as total
+         FROM transactions
+         WHERE user_id = $1 AND date >= NOW() - INTERVAL '${months} months'
+         GROUP BY TO_CHAR(date, 'YYYY-MM'), type
+         ORDER BY month`,
+        [userId]
+      );
+
+      const monthlyData: Record<string, { income: number; expense: number }> = {};
+
+      result.rows.forEach(row => {
+        if (!monthlyData[row.month]) {
+          monthlyData[row.month] = { income: 0, expense: 0 };
+        }
+        if (row.type === 'income') {
+          monthlyData[row.month].income = parseFloat(row.total);
+        } else if (row.type === 'expense') {
+          monthlyData[row.month].expense = parseFloat(row.total);
+        }
+      });
+
+      const labels = Object.keys(monthlyData).sort();
+      const incomeData = labels.map(m => monthlyData[m].income);
+      const expenseData = labels.map(m => monthlyData[m].expense);
+
+      // Format labels to show month names
+      const formattedLabels = labels.map(m => {
+        const [year, month] = m.split('-');
+        const monthNames = ['', 'T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
+        return `${monthNames[parseInt(month)]}/${year.slice(2)}`;
+      });
+
+      const chartConfig = {
+        type: chartType,
+        data: {
+          labels: formattedLabels,
+          datasets: [
+            {
+              label: 'Thu nhập',
+              data: incomeData,
+              backgroundColor: 'rgba(76, 175, 80, 0.7)',
+              borderColor: 'rgba(76, 175, 80, 1)',
+              borderWidth: 2,
+              fill: chartType === 'line' ? false : undefined,
+            },
+            {
+              label: 'Chi tiêu',
+              data: expenseData,
+              backgroundColor: 'rgba(244, 67, 54, 0.7)',
+              borderColor: 'rgba(244, 67, 54, 1)',
+              borderWidth: 2,
+              fill: chartType === 'line' ? false : undefined,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'top' }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: (value: number) => (value / 1000000).toFixed(1) + 'M'
+              }
+            }
+          }
+        }
+      };
+
+      const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=500&h=300`;
+
+      res.json({
+        imageUrl: chartUrl,
+        data: labels.map(month => ({
+          month,
+          income: monthlyData[month].income,
+          expense: monthlyData[month].expense,
+          savings: monthlyData[month].income - monthlyData[month].expense,
+        })),
+      });
+    } catch (error) {
+      console.error('Get trends chart error:', error);
+      res.status(500).json({ error: 'Failed to generate chart' });
+    }
+  }
+
+  /**
+   * Get budget progress chart (gauge/progress bars)
+   */
+  async getBudgetChart(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+
+      const result = await query(
+        `SELECT b.*, c.name as category_name, c.color as category_color
+         FROM budgets b
+         LEFT JOIN categories c ON b.category_id = c.id
+         WHERE b.user_id = $1 AND b.is_active = true`,
+        [userId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.json({
+          imageUrl: null,
+          message: 'No active budgets',
+          data: [],
+        });
+      }
+
+      const labels = result.rows.map(r => r.category_name || 'Khác');
+      const spentData = result.rows.map(r => parseFloat(r.spent) || 0);
+      const limitData = result.rows.map(r => parseFloat(r.amount_limit) || 0);
+      const percentages = result.rows.map(r => {
+        const spent = parseFloat(r.spent) || 0;
+        const limit = parseFloat(r.amount_limit) || 1;
+        return Math.min(100, (spent / limit) * 100);
+      });
+
+      const chartConfig = {
+        type: 'horizontalBar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Đã chi',
+              data: spentData,
+              backgroundColor: percentages.map((p: number) => 
+                p >= 100 ? 'rgba(244, 67, 54, 0.8)' : 
+                p >= 80 ? 'rgba(255, 152, 0, 0.8)' : 
+                'rgba(76, 175, 80, 0.8)'
+              ),
+              borderWidth: 0,
+            },
+            {
+              label: 'Còn lại',
+              data: result.rows.map((r: any) => Math.max(0, parseFloat(r.amount_limit) - (parseFloat(r.spent) || 0))),
+              backgroundColor: 'rgba(200, 200, 200, 0.3)',
+              borderWidth: 0,
+            }
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          scales: {
+            x: {
+              stacked: true,
+              ticks: {
+                callback: (value: number) => (value / 1000000).toFixed(1) + 'M'
+              }
+            },
+            y: {
+              stacked: true,
+            }
+          },
+          plugins: {
+            legend: { display: false }
+          }
+        }
+      };
+
+      const chartUrl = `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=500&h=${Math.max(200, labels.length * 50)}`;
+
+      res.json({
+        imageUrl: chartUrl,
+        data: result.rows.map((r: any) => ({
+          category: r.category_name,
+          spent: parseFloat(r.spent) || 0,
+          limit: parseFloat(r.amount_limit),
+          percentage: Math.min(100, ((parseFloat(r.spent) || 0) / parseFloat(r.amount_limit)) * 100),
+        })),
+      });
+    } catch (error) {
+      console.error('Get budget chart error:', error);
+      res.status(500).json({ error: 'Failed to generate chart' });
+    }
+  }
 }

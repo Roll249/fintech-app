@@ -452,4 +452,107 @@ export class AccountController {
   async getSupportedBanks(req: AuthenticatedRequest, res: Response) {
     res.json(SUPPORTED_BANKS);
   }
+
+  /**
+   * Generate test transactions for demo/testing purposes
+   * Creates 1-5 realistic transactions with proper categories
+   */
+  async generateTestTransactions(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const { id } = req.params;
+      const { count = 3 } = req.body; // Default 3 transactions
+
+      // Verify account exists
+      const accountCheck = await query(
+        'SELECT * FROM accounts WHERE id = $1 AND user_id = $2',
+        [id, userId]
+      );
+
+      if (accountCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Account not found' });
+      }
+
+      const account = accountCheck.rows[0];
+
+      // Get categories from database
+      const categoriesResult = await query(
+        `SELECT id, name, type FROM categories WHERE is_system = true`
+      );
+      const categories = categoriesResult.rows;
+      const expenseCategories = categories.filter((c: any) => c.type === 'expense');
+      const incomeCategories = categories.filter((c: any) => c.type === 'income');
+
+      const transactions = [];
+      let balanceChange = 0;
+      const numTransactions = Math.min(Math.max(1, Number(count)), 10); // 1-10
+
+      for (let i = 0; i < numTransactions; i++) {
+        const isExpense = Math.random() > 0.3; // 70% chance expense
+        const amount = Math.floor(Math.random() * 500000) + 10000; // 10k - 510k VND
+        const type = isExpense ? 'expense' : 'income';
+        
+        const categoryPool = isExpense ? expenseCategories : incomeCategories;
+        const category = categoryPool.length > 0 
+          ? categoryPool[Math.floor(Math.random() * categoryPool.length)]
+          : null;
+
+        const merchant = DEMO_MERCHANTS[Math.floor(Math.random() * DEMO_MERCHANTS.length)];
+        const daysAgo = Math.floor(Math.random() * 7);
+        const txDate = new Date();
+        txDate.setDate(txDate.getDate() - daysAgo);
+
+        const description = isExpense 
+          ? `Thanh toán tại ${merchant}` 
+          : `Nhận tiền từ ${merchant}`;
+
+        const result = await query(
+          `INSERT INTO transactions (user_id, account_id, amount, type, category_id, description, merchant_name, date, is_manual)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false)
+           RETURNING id, amount, type, description, date`,
+          [userId, id, amount, type, category?.id, description, merchant, txDate.toISOString().split('T')[0]]
+        );
+
+        transactions.push({
+          id: result.rows[0].id,
+          amount: parseFloat(result.rows[0].amount),
+          type: result.rows[0].type,
+          description: result.rows[0].description,
+          date: result.rows[0].date,
+          category: category ? { id: category.id, name: category.name } : null,
+          merchantName: merchant,
+        });
+
+        balanceChange += isExpense ? -amount : amount;
+      }
+
+      // Update account balance
+      const newBalance = parseFloat(account.balance) + balanceChange;
+      await query(
+        `UPDATE accounts SET balance = $1, last_synced_at = NOW() WHERE id = $2`,
+        [newBalance, id]
+      );
+
+      // Create notification for user
+      await query(
+        `INSERT INTO notifications (user_id, type, title, body, data)
+         VALUES ($1, 'bank_sync', 'Đồng bộ tài khoản', $2, $3)`,
+        [
+          userId,
+          `Đã tìm thấy ${numTransactions} giao dịch mới từ ${account.bank_name}`,
+          JSON.stringify({ accountId: id, transactionCount: numTransactions })
+        ]
+      );
+
+      res.json({
+        message: `Generated ${numTransactions} test transactions`,
+        transactions,
+        newBalance,
+        balanceChange,
+      });
+    } catch (error) {
+      console.error('Generate test transactions error:', error);
+      res.status(500).json({ error: 'Failed to generate test transactions' });
+    }
+  }
 }

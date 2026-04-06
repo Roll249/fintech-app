@@ -28,7 +28,6 @@
         android:extractNativeLibs="false"
         android:label="Fintech App"
         android:supportsRtl="true"
-        android:testOnly="true"
         android:theme="@style/Theme.FintechApp"
         android:usesCleartextTraffic="true" >
         <activity
