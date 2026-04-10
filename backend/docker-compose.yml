@@ -1,38 +1,65 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
   postgres:
-    image: postgres:16-alpine
-    container_name: fintech-postgres
+    image: postgres:15-alpine
+    container_name: fintech_postgres
     environment:
+      POSTGRES_DB: fintech
       POSTGRES_USER: fintech
-      POSTGRES_PASSWORD: fintech123
-      POSTGRES_DB: fintech_db
+      POSTGRES_PASSWORD: fintech_dev
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./init_v2.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fintech -d fintech_db"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U fintech"]
+      interval: 5s
       timeout: 5s
       retries: 5
 
-  # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: fintech-redis
+    container_name: fintech_redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fintech_backend
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=fintech
+      - DB_USER=fintech
+      - DB_PASSWORD=fintech_dev
+      - JWT_SECRET=fintech-jwt-secret-change-me-in-production
+      - JWT_REFRESH_SECRET=fintech-refresh-secret-change-me-in-production
+      - QR_SECRET=qr-signing-secret-change-me-in-production
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./init_v2.sql:/app/init_v2.sql
+    command: npm run dev
 
 volumes:
   postgres_data:

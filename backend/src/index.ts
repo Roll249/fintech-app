@@ -3,101 +3,176 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 
 // Load environment variables
 dotenv.config();
 
-// Import routers
-import { userRouter } from './services/user/user.routes.js';
-import { accountRouter } from './services/account/account.routes.js';
-import { transactionRouter } from './services/transaction/transaction.routes.js';
-import { budgetRouter } from './services/budget/budget.routes.js';
-import { billRouter } from './services/bill/bill.routes.js';
-import { fundRouter } from './services/fund/fund.routes.js';
-import { notificationRouter } from './services/notification/notification.routes.js';
-import { reportRouter } from './services/report/report.routes.js';
-import { adminRouter } from './services/admin/admin.routes.js';
-import { integrationRouter } from './services/integration/integration.routes.js';
-import { errorHandler } from './shared/middleware/error.middleware.js';
-import { authMiddleware, adminMiddleware } from './shared/middleware/auth.middleware.js';
-
-// Import queue worker and scheduler
-import { queueWorker } from './services/queue/index.js';
-import { schedulerService } from './services/scheduler/index.js';
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(helmet());
-app.use(cors());
+// =====================================================
+// MIDDLEWARE
+// =====================================================
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable for development
+}));
+
+// CORS - Allow all origins for mobile app
+app.use(cors({
+  origin: '*', // Allow all for mobile app development
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
+
+// Request logging
 app.use(morgan('combined'));
+
+// Body parsing
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Serve uploaded files
-app.use('/uploads', express.static('uploads'));
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // limit each IP to 1000 requests per windowMs
+  message: { error: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' },
+});
+app.use('/api/', limiter);
 
-// Health check
+// =====================================================
+// ROUTES IMPORT
+// =====================================================
+
+// Auth routes
+import { authRouter } from './services/auth/auth.routes.js';
+
+// User routes
+import { userRouter } from './services/user/user.routes.js';
+
+// Bank routes
+import { bankRouter } from './services/bank/bank.routes.js';
+
+// Fund routes
+import { fundRouter } from './services/fund/fund.routes.js';
+
+// Transaction routes
+import { transactionRouter } from './services/transaction/transaction.routes.js';
+
+// QR routes
+import { qrRouter } from './services/qr/qr.routes.js';
+
+// Allocation routes
+import { allocationRouter } from './services/allocation/allocation.routes.js';
+
+// Notification routes
+import { notificationRouter } from './services/notification/notification.routes.js';
+
+// Budget routes
+import { budgetRouter } from './services/budget/budget.routes.js';
+
+// Report routes
+import { reportRouter } from './services/report/report.routes.js';
+
+// Bill routes
+import { billRouter } from './services/bill/bill.routes.js';
+
+// Simulation routes (admin only)
+import { simulationRouter } from './services/simulation/simulation.routes.js';
+
+// Middleware
+import { errorHandler } from './shared/middleware/error.middleware.js';
+import { authMiddleware, adminMiddleware } from './shared/middleware/auth.middleware.js';
+
+// =====================================================
+// ROUTES DEFINITION
+// =====================================================
+
+// Health check - Public
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '2.0.0',
   });
 });
 
-// Public routes (no auth required)
-app.use('/api/v1/auth', userRouter);
+// API version info - Public
+app.get('/api/v1', (req, res) => {
+  res.json({
+    name: 'Fintech App API',
+    version: '2.0.0',
+    description: 'Financial Management API with Bank Simulation',
+  });
+});
 
-// Integration routes (webhook endpoints - use HMAC auth)
-app.use('/api/v1/integrations', integrationRouter);
+// Auth routes - Public
+app.use('/api/v1/auth', authRouter);
 
-// Protected routes (auth required)
+// Bank simulation - Public (for testing/demo)
+app.use('/api/v1/banks', bankRouter);
+
+// Protected routes - Require authentication
 app.use('/api/v1/users', authMiddleware, userRouter);
-app.use('/api/v1/accounts', authMiddleware, accountRouter);
-app.use('/api/v1/transactions', authMiddleware, transactionRouter);
-app.use('/api/v1/budgets', authMiddleware, budgetRouter);
-app.use('/api/v1/bills', authMiddleware, billRouter);
 app.use('/api/v1/funds', authMiddleware, fundRouter);
+app.use('/api/v1/transactions', authMiddleware, transactionRouter);
+app.use('/api/v1/qr', authMiddleware, qrRouter);
+app.use('/api/v1/allocations', authMiddleware, allocationRouter);
 app.use('/api/v1/notifications', authMiddleware, notificationRouter);
+app.use('/api/v1/budgets', authMiddleware, budgetRouter);
 app.use('/api/v1/reports', authMiddleware, reportRouter);
+app.use('/api/v1/bills', authMiddleware, billRouter);
 
-// Admin routes (admin auth required)
-app.use('/api/v1/admin', authMiddleware, adminMiddleware, adminRouter);
+// Admin routes - Require admin role
+app.use('/api/v1/simulation', authMiddleware, adminMiddleware, simulationRouter);
 
-// Error handling
-app.use(errorHandler);
+// =====================================================
+// ERROR HANDLING
+// =====================================================
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ error: 'Not found' });
+  res.status(404).json({ error: 'Không tìm th��y endpoint', code: 'NOT_FOUND' });
 });
 
-// Start server
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Fintech Backend running on port ${PORT}`);
-  console.log(`📚 API: http://localhost:${PORT}/api/v1`);
+// Global error handler
+app.use(errorHandler);
+
+// =====================================================
+// START SERVER
+// =====================================================
+
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log('===========================================');
+  console.log('🚀 Fintech App Backend v2.0.0');
+  console.log('===========================================');
+  console.log(`📡 Server: http://localhost:${PORT}`);
+  console.log(`📚 API:    http://localhost:${PORT}/api/v1`);
   console.log(`❤️  Health: http://localhost:${PORT}/health`);
-  
-  // Start queue worker
-  if (process.env.ENABLE_QUEUE_WORKER !== 'false') {
-    queueWorker.start();
-    console.log('📋 Queue worker started');
+  console.log('===========================================');
+
+  // Check environment
+  if (!process.env.JWT_SECRET) {
+    console.warn('⚠️  WARNING: JWT_SECRET not set in environment!');
   }
-  
-  // Start scheduler
-  if (process.env.ENABLE_SCHEDULER !== 'false') {
-    schedulerService.start();
-    console.log('⏰ Scheduler started');
+  if (!process.env.QR_SECRET) {
+    console.warn('⚠️  WARNING: QR_SECRET not set in environment!');
   }
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully...');
-  queueWorker.stop();
-  schedulerService.stop();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully...');
   server.close(() => {
     console.log('Server closed');
     process.exit(0);
