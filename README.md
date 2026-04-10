@@ -167,6 +167,32 @@ curl -X POST http://localhost:3000/api/v1/simulation/create-users \
 
 ---
 
+## 🧹 Reset Demo Data
+
+Để demo sản phẩm với dữ liệu sạch, sử dụng các API sau:
+
+```bash
+# Reset demo data của user hiện tại (xóa funds, transactions, notifications, etc.)
+curl -X POST http://localhost:3000/api/v1/demo/reset \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+
+# Tạo lại demo data mặc định cho user (4 quỹ, allocation rule)
+curl -X POST http://localhost:3000/api/v1/demo/create-defaults \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+
+# Reset toàn bộ demo data (admin) - xóa tất cả data của tất cả users
+curl -X POST http://localhost:3000/api/v1/demo/reset-all \
+  -H "Authorization: Bearer ADMIN_ACCESS_TOKEN"
+
+# Kiểm tra trạng thái demo data
+curl -X GET http://localhost:3000/api/v1/demo/status \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+---
+
 ## 📡 API Endpoints
 
 ### Authentication
@@ -208,6 +234,14 @@ curl -X POST http://localhost:3000/api/v1/simulation/create-users \
 |--------|----------|--------|
 | POST | `/api/v1/simulation/create-users` | Tạo test users |
 | POST | `/api/v1/simulation/incoming-transfer` | Mô phỏng nhận tiền |
+
+### Demo Management
+| Method | Endpoint | Mô tả |
+|--------|----------|--------|
+| POST | `/api/v1/demo/reset` | Reset demo data cho user |
+| POST | `/api/v1/demo/create-defaults` | Tạo demo data mặc định |
+| POST | `/api/v1/demo/reset-all` | Reset toàn bộ demo data (admin) |
+| GET | `/api/v1/demo/status` | Lấy trạng thái demo data |
 
 ---
 

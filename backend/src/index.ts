@@ -82,6 +82,9 @@ import { billRouter } from './services/bill/bill.routes.js';
 // Simulation routes (admin only)
 import { simulationRouter } from './services/simulation/simulation.routes.js';
 
+// Demo routes (for resetting demo data)
+import { demoRouter } from './services/demo/demo.routes.js';
+
 // Middleware
 import { errorHandler } from './shared/middleware/error.middleware.js';
 import { authMiddleware, adminMiddleware } from './shared/middleware/auth.middleware.js';
@@ -127,6 +130,9 @@ app.use('/api/v1/bills', authMiddleware, billRouter);
 
 // Admin routes - Require admin role
 app.use('/api/v1/simulation', authMiddleware, adminMiddleware, simulationRouter);
+
+// Demo management routes - Require authentication
+app.use('/api/v1/demo', authMiddleware, demoRouter);
 
 // =====================================================
 // ERROR HANDLING

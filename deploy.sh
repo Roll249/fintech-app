@@ -170,6 +170,45 @@ create_test_users() {
     fi
 }
 
+reset_demo_data() {
+    echo ""
+    echo -e "${BLUE}🧹 Reset demo data...${NC}"
+    
+    # Login as admin
+    local RESPONSE=$(curl -s -X POST http://localhost:3000/api/v1/auth/login \
+        -H "Content-Type: application/json" \
+        -d '{"email":"admin@fintechapp.com","password":"admin123"}')
+    
+    local TOKEN=$(echo $RESPONSE | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)
+    
+    if [ -z "$TOKEN" ]; then
+        echo -e "${YELLOW}⚠️ Không thể đăng nhập admin. Backend có thể chưa sẵn sàng.${NC}"
+        return 1
+    fi
+    
+    echo "  - Đăng nhập admin thành công"
+    
+    # Reset all demo data
+    echo "  - Đang reset toàn bộ demo data..."
+    local RESET_RESPONSE=$(curl -s -X POST http://localhost:3000/api/v1/demo/reset-all \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $TOKEN")
+    
+    if echo "$RESET_RESPONSE" | grep -q '"success":true'; then
+        echo -e "${GREEN}✅ Đã reset toàn bộ demo data!${NC}"
+        
+        # Create demo defaults for admin
+        echo "  - Đang tạo demo data mặc định cho admin..."
+        curl -s -X POST http://localhost:3000/api/v1/demo/create-defaults \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" > /dev/null
+        
+        echo -e "${GREEN}✅ Đã tạo demo data mặc định!${NC}"
+    else
+        echo -e "${YELLOW}⚠️ Không thể reset demo data.${NC}"
+    fi
+}
+
 build_android() {
     echo ""
     echo -e "${BLUE}📱 Build Android APK...${NC}"
@@ -246,7 +285,8 @@ show_menu() {
     echo "  3. 🌐 Chỉ khởi động ngrok"
     echo "  4. 👥 Chỉ tạo test users"
     echo "  5. 📱 Chỉ build APK"
-    echo "  6. 📋 Hiển thị thông tin deploy hiện tại"
+    echo "  6. 🧹 Reset demo data (xóa tất cả data)"
+    echo "  7. 📋 Hiển thị thông tin deploy hiện tại"
     echo "  0. ❌ Thoát"
     echo "=========================================="
     echo ""
@@ -254,7 +294,7 @@ show_menu() {
 
 while true; do
     show_menu
-    read -p "Chọn (0-6): " choice
+    read -p "Chọn (0-7): " choice
     
     case $choice in
         1)
@@ -281,6 +321,10 @@ while true; do
             build_android
             ;;
         6)
+            start_backend
+            reset_demo_data
+            ;;
+        7)
             echo ""
             echo "Thông tin hiện tại:"
             if [ -f /tmp/fintech_backend_url.txt ]; then

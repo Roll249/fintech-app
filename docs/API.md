@@ -1017,4 +1017,93 @@ Requires HMAC signature verification via `X-Bank-Signature` header.
 
 ---
 
-*Last Updated: 2024-04-04*
+## Demo Management
+
+### Reset Demo Data
+Xóa tất cả demo data của một user (funds, transactions, notifications, etc.)
+
+```http
+POST /demo/reset
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "userId": "uuid" // optional, for admin to reset other users
+}
+
+Response 200:
+{
+  "success": true,
+  "data": {
+    "message": "Đã reset demo data cho user_name",
+    "userId": "uuid"
+  }
+}
+```
+
+### Create Default Demo Data
+Tạo demo data mặc định cho user (4 quỹ, 1 allocation rule, thông báo chào mừng)
+
+```http
+POST /demo/create-defaults
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "userId": "uuid" // optional, for admin to create for other users
+}
+
+Response 201:
+{
+  "success": true,
+  "data": {
+    "message": "Đã tạo demo data cho user_name",
+    "userId": "uuid",
+    "fundsCreated": 4
+  }
+}
+```
+
+### Reset All Demo Data (Admin Only)
+Xóa toàn bộ demo data của tất cả users (giữ lại users)
+
+```http
+POST /demo/reset-all
+Authorization: Bearer <admin_token>
+
+Response 200:
+{
+  "success": true,
+  "data": {
+    "message": "Đã reset toàn bộ demo data"
+  }
+}
+```
+
+### Get Demo Status
+Lấy trạng thái demo data của user hiện tại
+
+```http
+GET /demo/status
+Authorization: Bearer <token>
+
+Response 200:
+{
+  "success": true,
+  "data": {
+    "userId": "uuid",
+    "total_funds": 4,
+    "total_transactions": 0,
+    "total_notifications": 1,
+    "total_allocation_rules": 1,
+    "total_budgets": 0,
+    "total_bills": 0,
+    "total_fund_balance": 0,
+    "hasDemoData": true
+  }
+}
+```
+
+---
+
+*Last Updated: 2024-04-10*
